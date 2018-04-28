@@ -1,0 +1,149 @@
+---
+title: "clustering_train_test"
+author: "JAY SHAH"
+date: "April 28, 2018"
+output: word_document
+---
+
+```{r Libraries}
+library(data.table)
+library(factoextra)
+library(dplyr)
+library(tidyverse)
+```
+```{r Reading Data Set}
+train = fread("E:/USA/Projects/Research/R_code/w8/train_clust.csv",data.table = T)
+train = train[,-1]
+test = fread("E:/USA/Projects/Research/R_code/w8/test_clust.csv",data.table = T)
+test = test[,-1]
+```
+
+```{r creating Index}
+#index = fread("E:/USA/Projects/Research/R_code/w6/index_all.csv")
+#index$new = paste(index$RunName,index$win60s)
+#train$new = paste(train$RunName,train$win60s)
+
+#index_train = as.data.table(train$new)
+#colnames(index_train)='new'
+#index_train = merge(index_train, index[,c('c','new')],by = 'new')
+```
+
+
+```{r calculating events}
+event_count = as.data.table(table(train$Event_ID, dnn = c("events")))
+as.data.table(table(train$Event_ID, dnn = c("events")))
+```
+
+
+```{r index of sample evnts 1}
+events_more_than_10 = 25 < event_count$N & event_count$N <= 100
+events_more_than_10 = event_count$events[events_more_than_10]
+
+events_more_than_100 = event_count$N > 100
+events_more_than_100 = event_count$events[events_more_than_100]  
+```
+
+```{r index of sample evnts 2}
+#this is for events having length greater than 100
+sample_index = NULL
+for (i in 1:length(events_more_than_100)){
+    set.seed(1001)
+    temp = filter(train, Event_ID == events_more_than_100[i]) %>%  sample_n(100)
+    sample_index = rbind(sample_index, temp)
+}
+
+#this is for variable length less than 100
+sampl_ind = NULL
+for (i in 1:length(events_more_than_10)) {
+    temp = filter(train, Event_ID == events_more_than_10[i])
+    sampl_ind = rbind(sampl_ind, temp)
+
+}
+#total sample index for clustering 
+join_train = rbind(sampl_ind, sample_index)    
+```
+
+```{r creating functions}
+features = function(data){
+    newdata = NULL
+    mean_speed = as.data.frame( rep(0,dim(data)[1]))
+    mean_acc_lot =as.data.frame( rep(0,dim(data)[1]))
+    mean_acc_lan = as.data.frame(rep(0,dim(data)[1]))
+    sd_speed = as.data.frame(rep(0,dim(data)[1]))
+    sd_acc_lot = as.data.frame(rep(0,dim(data)[1]))
+    sd_acc_lat = as.data.frame(rep(0,dim(data)[1]))
+    max_speed = as.data.frame(rep(0,dim(data)[1]))
+    max_acc_lot = as.data.frame(rep(0,dim(data)[1]))
+    max_acc_lat = as.data.frame(rep(0,dim(data)[1]))
+    min_speed = as.data.frame(rep(0,dim(data)[1]))
+    min_acc_lot = as.data.frame(rep(0,dim(data)[1]))
+    min_acc_lat = as.data.frame(rep(0,dim(data)[1]))
+    for (i in c(1:dim(data)[1])) {
+        mean_speed[i,] = mean(unlist(data[i,5:65]))
+        mean_acc_lot[i,] = mean(unlist(data[i , 66:126]))
+        mean_acc_lan[i,] = mean(unlist(data[i, 127:187]))
+        sd_speed[i,] = sd((unlist(data[ i,5:65])))
+        sd_acc_lot[i,] = sd((unlist(data[i , 66:126])))
+        sd_acc_lat[i,] = sd((unlist(data[i , 127:187])))
+        max_speed[i,] = max((unlist(data[ i,5:65])))
+        max_acc_lot[i,] = max((unlist(data[i , 66:126])))
+        max_acc_lat[i,] = max((unlist(data[i , 127:187])))
+        min_speed[i,] = min((unlist(data[ i,5:65])))
+        min_acc_lot[i,] = min((unlist(data[i , 66:126])))
+        min_acc_lat[i,] = min((unlist(data[i , 127:187])))
+    }
+    newdata =as.data.table(cbind(mean_speed,mean_acc_lot,mean_acc_lan, sd_speed,sd_acc_lot,sd_acc_lat,
+                                 max_speed,max_acc_lot,max_acc_lat,min_speed,mean_acc_lot,mean_acc_lan))
+    colnames(newdata) = c("mean_speed","mean_acc_lot","mean_acc_lan", "sd_speed","sd_acc_lot","sd_acc_lat","max_speed",
+                          "max_acc_lot","max_acc_lat","min_speed", "mean_acc_lot","mean_acc_lan")
+    return(newdata)
+}
+
+```
+
+
+```{r Creating Data}
+train_feat = features(join_train)
+
+```
+
+```{r Building Clust}
+hc_ward=hclust(dist(train_feat), method="ward.D")
+```
+### Questions related to type of Dissimilarity measure to use?
+
+```{r Visualisation}
+
+plot(hc_ward,main="ward.D", xlab="", sub="", cex=.9)
+
+```
+Here we can see only 2 clusters.
+```{r Selecting Clusters}
+fviz_nbclust(train_feat, hcut, method = "wss",hc_method = "ward.D", main = "Ward.D") +
+  geom_vline(xintercept = 2, linetype = 2)
+```
+```{r cutting tree}
+hc_ward_cut3 = cutree(hc_ward,k = 3)
+
+```
+
+```{r}
+clus1 = map_dbl(train_feat[hc_ward_cut3 == 1], mean)
+clus2 = map_dbl(train_feat[hc_ward_cut3 == 2], mean)
+clus3 = map_dbl(train_feat[hc_ward_cut3 == 3], mean)
+```
+```{r}
+#dist(clus1)
+euc.dist <- function(x1, x2) sqrt(sum((x1 - x2) ^ 2))
+euc.dist(clus1,clus2)
+euc.dist(clus1,clus3)
+euc.dist(clus2,clus1)
+
+```
+```{r}
+
+```
+```{r}
+
+```
+

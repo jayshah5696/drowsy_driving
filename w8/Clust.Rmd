@@ -1,0 +1,274 @@
+---
+title: "Clustering of Events"
+output: word_document
+---
+
+```{r Libraries}
+library(data.table)
+library(factoextra)
+library(dplyr)
+library(tidyverse)
+```
+```{r Reading Data Set}
+train = fread("E:/USA/Projects/Research/R_code/w8/train_clust.csv",data.table = T)
+train = train[,-1]
+test = fread("E:/USA/Projects/Research/R_code/w8/test_clust.csv",data.table = T)
+test = test[,-1]
+```
+
+```{r creating Index}
+#index = fread("E:/USA/Projects/Research/R_code/w6/index_all.csv")
+#index$new = paste(index$RunName,index$win60s)
+#train$new = paste(train$RunName,train$win60s)
+
+#index_train = as.data.table(train$new)
+#colnames(index_train)='new'
+#index_train = merge(index_train, index[,c('c','new')],by = 'new')
+```
+
+
+```{r calculating events}
+event_count = as.data.table(table(train$Event_ID, dnn = c("events")))
+as.data.table(table(train$Event_ID, dnn = c("events")))
+```
+
+
+```{r index of sample evnts 1}
+events_more_than_10 = 25 < event_count$N & event_count$N <= 100
+events_more_than_10 = event_count$events[events_more_than_10]
+
+events_more_than_100 = event_count$N > 100
+events_more_than_100 = event_count$events[events_more_than_100]  
+```
+
+```{r index of sample evnts 2}
+#this is for events having length greater than 100
+sample_index = NULL
+for (i in 1:length(events_more_than_100)){
+    set.seed(1001)
+    temp = filter(train, Event_ID == events_more_than_100[i]) %>%  sample_n(100)
+    sample_index = rbind(sample_index, temp)
+}
+
+#this is for variable length less than 100
+sampl_ind = NULL
+for (i in 1:length(events_more_than_10)) {
+    temp = filter(train, Event_ID == events_more_than_10[i])
+    sampl_ind = rbind(sampl_ind, temp)
+
+}
+#total sample index for clustering 
+join_train = rbind(sampl_ind, sample_index)    
+```
+
+```{r creating functions}
+features = function(data){
+    newdata = NULL
+    mean_speed = as.data.frame( rep(0,dim(data)[1]))
+    mean_acc_lot =as.data.frame( rep(0,dim(data)[1]))
+    mean_acc_lan = as.data.frame(rep(0,dim(data)[1]))
+    sd_speed = as.data.frame(rep(0,dim(data)[1]))
+    sd_acc_lot = as.data.frame(rep(0,dim(data)[1]))
+    sd_acc_lat = as.data.frame(rep(0,dim(data)[1]))
+    max_speed = as.data.frame(rep(0,dim(data)[1]))
+    max_acc_lot = as.data.frame(rep(0,dim(data)[1]))
+    max_acc_lat = as.data.frame(rep(0,dim(data)[1]))
+    min_speed = as.data.frame(rep(0,dim(data)[1]))
+    min_acc_lot = as.data.frame(rep(0,dim(data)[1]))
+    min_acc_lat = as.data.frame(rep(0,dim(data)[1]))
+    for (i in c(1:dim(data)[1])) {
+        mean_speed[i,] = mean(unlist(data[i,5:65]))
+        mean_acc_lot[i,] = mean(unlist(data[i , 66:126]))
+        mean_acc_lan[i,] = mean(unlist(data[i, 127:187]))
+        sd_speed[i,] = sd((unlist(data[ i,5:65])))
+        sd_acc_lot[i,] = sd((unlist(data[i , 66:126])))
+        sd_acc_lat[i,] = sd((unlist(data[i , 127:187])))
+        max_speed[i,] = max((unlist(data[ i,5:65])))
+        max_acc_lot[i,] = max((unlist(data[i , 66:126])))
+        max_acc_lat[i,] = max((unlist(data[i , 127:187])))
+        min_speed[i,] = min((unlist(data[ i,5:65])))
+        min_acc_lot[i,] = min((unlist(data[i , 66:126])))
+        min_acc_lat[i,] = min((unlist(data[i , 127:187])))
+    }
+    newdata =as.data.table(cbind(mean_speed,mean_acc_lot,mean_acc_lan, sd_speed,sd_acc_lot,sd_acc_lat,
+                                 max_speed,max_acc_lot,max_acc_lat,min_speed,mean_acc_lot,mean_acc_lan))
+    colnames(newdata) = c("mean_speed","mean_acc_lot","mean_acc_lan", "sd_speed","sd_acc_lot","sd_acc_lat","max_speed",
+                          "max_acc_lot","max_acc_lat","min_speed", "mean_acc_lot","mean_acc_lan")
+    return(newdata)
+}
+
+```
+
+
+```{r Creating Data}
+train_feat = features(join_train)
+
+```
+
+```{r Building Clust}
+hc_ward=hclust(dist(train_feat), method="ward.D")
+```
+### Questions related to type of Dissimilarity measure to use?
+
+```{r Visualisation}
+
+plot(hc_ward,main="ward.D", xlab="", sub="", cex=.9)
+
+```
+Here we can see only 2 clusters.
+```{r Selecting Clusters}
+fviz_nbclust(train_feat, hcut, method = "wss",hc_method = "ward.D", main = "Ward.D") +
+  geom_vline(xintercept = 2, linetype = 2)
+```
+```{r cutting tree}
+hc_ward_cut2 = cutree(hc_ward,k = 2)
+hc_ward_cut3 = cutree(hc_ward,k = 3)
+hc_ward_cut4 = cutree(hc_ward,k = 4)
+
+```
+
+```{r bar plot for 2 cluster}
+index_train2 = cbind(join_train[,'Event_ID'],as.data.table(hc_ward_cut2))
+index_train2$V1 = as.factor(index_train2$V1)
+index_train2$hc_ward_cut2 =as.factor(index_train2$hc_ward_cut2)
+
+ind1 = group_by(index_train2, V1) %>% summarize(size = length(hc_ward_cut2), clus1 = summary(hc_ward_cut2)[1],clus2 = summary(hc_ward_cut2)[2])
+
+ind_new1 = ind1 %>% gather(`clus1`, `clus2`, key = cluster, value = count)
+ind_new1$size = NULL
+ind_new1$V1 = as.factor(ind_new1$V1)
+ggplot(ind_new1, aes(x=V1, y=count, fill = cluster, label = "cluster1","cluster2")) + geom_bar(stat="identity",position="stack",width=0.95)+theme_bw() + ylab("Number of Events") +xlab("Events")
+```
+```{r bar plot for 3 cluster}
+index_train3 = cbind(join_train[,'Event_ID'],as.data.table(hc_ward_cut3))
+index_train3$V1 = as.factor(index_train3$V1)
+index_train3$hc_ward_cut3 =as.factor(index_train3$hc_ward_cut3)
+
+ind2 = group_by(index_train3, V1) %>% summarize(size = length(hc_ward_cut3), clus1 = summary(hc_ward_cut3)[1],clus2 = summary(hc_ward_cut3)[2],clus3 = summary(hc_ward_cut3)[3])
+
+ind2 = ind2 %>% gather(`clus1`, `clus2`, `clus3`, key = cluster, value = count)
+ind2$size = NULL
+ind2$V1 = as.factor(ind2$V1)
+ggplot(ind2, aes(x=V1, y=count, fill = cluster, label = "cluster1","cluster2")) + geom_bar(stat="identity",position="stack",width=0.95)+theme_bw() + ylab("Number of Events") +xlab("Events")
+```
+```{r bar plot for 4 cluster}
+index_train4 = cbind(join_train[,'Event_ID'],as.data.table(hc_ward_cut4))
+index_train4$V1 = as.factor(index_train4$V1)
+index_train4$hc_ward_cut4 =as.factor(index_train4$hc_ward_cut4)
+
+ind3 = group_by(index_train4, V1) %>% summarize(clus1 = sum(hc_ward_cut4==1),clus2 = sum(hc_ward_cut4==2),clus3 = sum(hc_ward_cut4==3), clus4 = sum(hc_ward_cut4==4), clus5 = sum(hc_ward_cut4==5))
+
+
+ind3 = ind3 %>% gather(`clus1`, `clus2`, `clus3`,`clus4`, key = cluster, value = count)
+ind3$size = NULL
+ind3$V1 = as.factor(ind3$V1)
+ggplot(ind3, aes(x=V1, y=count, fill = cluster, label = "cluster1","cluster2")) + geom_bar(stat="identity",position="stack",width=0.95)+theme_bw() + ylab("Number of Events") +xlab("Events")
+```
+```{r Deviding the Data}
+indices = ifelse(hc_ward_cut2==1,TRUE, FALSE)
+summary(as.factor(hc_ward_cut2))
+summary(indices)
+clust_1 = train_feat[indices]
+clust_2 = train_feat[!indices]
+
+```
+
+```{r looking at statistics of both Clusters}
+print("Results before Clusters, mean and Std Dev")
+mean(train_feat$mean_speed)
+sd(train_feat$mean_speed)
+
+print("~~~~~~")
+
+print("mean speed of cluster 1")
+mean(clust_1$mean_speed)
+print("mean speed of Cluster 2")
+mean(clust_2$mean_speed)
+
+print("~~~~~~~~~")
+
+print("Std Dev speed of cluster 1")
+sd(clust_1$mean_speed)
+print("Std Dev of Cluster 2")
+sd(clust_2$mean_speed)
+
+mean(clust_1$sd_speed)
+mean(clust_2$sd_speed)
+```
+```{r Deviding the Data2}
+indices1 = ifelse(hc_ward_cut3==1,TRUE, FALSE)
+indices2 = ifelse(hc_ward_cut3==2,TRUE, FALSE)
+indices3 = ifelse(hc_ward_cut3==3,TRUE, FALSE)
+summary(as.factor(hc_ward_cut3))
+clust_1 = train_feat[indices1]
+clust_2 = train_feat[indices2]
+clust_3 = train_feat[indices3]
+
+```
+```{r}
+print("Results before Clusters, mean and Std Dev")
+mean(train_feat$mean_speed)
+sd(train_feat$mean_speed)
+
+print("~~~~~~")
+
+print("mean speed of cluster 1")
+mean(clust_1$mean_speed)
+print("mean speed of Cluster 2")
+mean(clust_2$mean_speed)
+print("mean speed of Cluster 3")
+mean(clust_3$mean_speed)
+print("~~~~~~~~~")
+
+print("Std Dev speed of cluster 1")
+sd(clust_1$mean_speed)
+print("Std Dev of Cluster 2")
+sd(clust_2$mean_speed)
+print("Std Dev of Cluster 3")
+sd(clust_3$mean_speed)
+mean(clust_1$sd_speed)
+mean(clust_2$sd_speed)
+mean(clust_3$sd_speed)
+```
+```{r Deviding the Data3}
+indices1 = ifelse(hc_ward_cut4==1,TRUE, FALSE)
+indices2 = ifelse(hc_ward_cut4==2,TRUE, FALSE)
+indices3 = ifelse(hc_ward_cut4==3,TRUE, FALSE)
+indices4 = ifelse(hc_ward_cut4==4,TRUE, FALSE)
+summary(as.factor(hc_ward_cut4))
+clust_1 = train_feat[indices1]
+clust_2 = train_feat[indices2]
+clust_3 = train_feat[indices3]
+clust_4 = train_feat[indices4]
+
+```
+```{r}
+print("Results before Clusters, mean and Std Dev")
+mean(train_feat$mean_speed)
+sd(train_feat$mean_speed)
+
+print("~~~~~~")
+
+print("mean speed of cluster 1")
+mean(clust_1$mean_speed)
+print("mean speed of Cluster 2")
+mean(clust_2$mean_speed)
+print("mean speed of Cluster 3")
+mean(clust_3$mean_speed)
+print("mean speed of Cluster 4")
+mean(clust_4$mean_speed)
+print("~~~~~~~~~")
+
+print("Std Dev speed of cluster 1")
+sd(clust_1$mean_speed)
+print("Std Dev of Cluster 2")
+sd(clust_2$mean_speed)
+print("Std Dev of Cluster 3")
+sd(clust_3$mean_speed)
+print("Std Dev of Cluster 4")
+sd(clust_4$mean_speed)
+mean(clust_1$sd_speed)
+mean(clust_2$sd_speed)
+mean(clust_3$sd_speed)
+mean(clust_4$sd_speed)
+```

@@ -1,0 +1,173 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  pdf_document: default
+  html_notebook: default
+---
+
+### Setting working Directory to Data lOcation
+
+```{r Libraries}
+library(data.table)
+library(factoextra)
+library(dplyr)
+library(tidyverse)
+```
+```{r Reading Data Set}
+train = fread("E:/USA/Projects/Research/R_code/w6/train_clust.csv",data.table = T)
+train = train[,-1]
+test = fread("E:/USA/Projects/Research/R_code/w6/test_clust.csv",data.table = T)
+test = test[,-1]
+```
+Here I have built Custom Function to create Features
+```{r Building Custom Func}
+features = function(data){
+    newdata = NULL
+    mean_speed = as.data.frame( rep(0,dim(data)[1]))
+    mean_acc_lot =as.data.frame( rep(0,dim(data)[1]))
+    mean_acc_lan = as.data.frame(rep(0,dim(data)[1]))
+    sd_speed = as.data.frame(rep(0,dim(data)[1]))
+    sd_acc_lot = as.data.frame(rep(0,dim(data)[1]))
+    sd_acc_lat = as.data.frame(rep(0,dim(data)[1]))
+    max_speed = as.data.frame(rep(0,dim(data)[1]))
+    max_acc_lot = as.data.frame(rep(0,dim(data)[1]))
+    max_acc_lat = as.data.frame(rep(0,dim(data)[1]))
+    min_speed = as.data.frame(rep(0,dim(data)[1]))
+    min_acc_lot = as.data.frame(rep(0,dim(data)[1]))
+    min_acc_lat = as.data.frame(rep(0,dim(data)[1]))
+    for (i in c(1:dim(data)[1])) {
+        mean_speed[i,] = mean(unlist(data[i,4:64]))
+        mean_acc_lot[i,] = mean(unlist(data[i , 65:125]))
+        mean_acc_lan[i,] = mean(unlist(data[i, 126:186]))
+        sd_speed[i,] = sd((unlist(data[ i,4:64])))
+        sd_acc_lot[i,] = sd((unlist(data[i , 65:125])))
+        sd_acc_lat[i,] = sd((unlist(data[i , 126:186])))
+        max_speed[i,] = max((unlist(data[ i,4:64])))
+        max_acc_lot[i,] = max((unlist(data[i , 65:125])))
+        max_acc_lat[i,] = max((unlist(data[i , 126:186])))
+        min_speed[i,] = min((unlist(data[ i,4:64])))
+        min_acc_lot[i,] = min((unlist(data[i , 65:125])))
+        min_acc_lat[i,] = min((unlist(data[i , 126:186])))
+    }
+    newdata =as.data.table(cbind(mean_speed,mean_acc_lot,mean_acc_lan, sd_speed,sd_acc_lot,sd_acc_lat,
+                                 max_speed,max_acc_lot,max_acc_lat,min_speed,mean_acc_lot,mean_acc_lan))
+    colnames(newdata) = c("mean_speed","mean_acc_lot","mean_acc_lan", "sd_speed","sd_acc_lot","sd_acc_lat","max_speed",
+                          "max_acc_lot","max_acc_lat","min_speed", "mean_acc_lot","mean_acc_lan")
+    return(newdata)
+}
+```
+### Creating Data
+
+```{r Creating Data}
+train_feat = features(train)
+test_feat = features(test)
+```
+
+```{r Building Clust}
+hc_ward=hclust(dist(train_feat), method="ward.D")
+```
+### Questions related to type of Dissimilarity measure to use?
+
+```{r Visualisation}
+
+plot(hc_ward,main="ward.D", xlab="", sub="", cex=.9)
+
+```
+Here we can see only 2 clusters.
+```{r Selecting Clusters}
+fviz_nbclust(train_feat, hcut, method = "wss",hc_method = "ward.D", main = "Ward.D") +
+  geom_vline(xintercept = 2, linetype = 2)
+```
+```{r cutting tree}
+hc_ward_cut = cutree(hc_ward,k=2)
+hc_ward_cut2 = cutree(hc_ward,k=3)
+```
+
+
+```{r summerising Data}
+index = fread("E:/USA/Projects/Research/R_code/w6/index_all.csv")
+index$new = paste(index$RunName,index$win60s)
+train$new = paste(train$RunName,train$win60s)
+
+index_train = as.data.table(train$new)
+colnames(index_train)='new'
+index_train = merge(index_train, index[,c('c','new')],by = 'new')
+
+index_train1 = cbind(index_train,as.data.table(hc_ward_cut))
+
+```
+```{r ploting using gg plot}
+index_train1$c = as.factor(index_train1$c)
+index_train1$hc_ward_cut =as.factor(index_train1$hc_ward_cut)
+```
+
+```{r ploting 2 clusters}
+ind = group_by(index_train1[,2:3], c) %>% summarize(size = length(hc_ward_cut), frq1 = summary(hc_ward_cut)[1],frq2 = summary(hc_ward_cut)[2])
+
+barplot(height = t(ind[,c(3,4)]), names.arg = ind$c,col=c("blue","red"),legend.text = c("1","2"),args.legend = list(x = "topleft"),axisnames = T,cex.names = 0.5)
+
+```
+
+```{r ploting 3 charts}
+index_train2 = cbind(index_train,as.data.table(hc_ward_cut2))
+index_train2$c = as.factor(index_train2$c)
+index_train2$hc_ward_cut2 =as.factor(index_train2$hc_ward_cut2)
+```
+
+```{r plot}
+ind1 = group_by(index_train2[,2:3], c) %>% summarize(size = length(hc_ward_cut2), frq1 = summary(hc_ward_cut2)[1],frq2 = summary(hc_ward_cut2)[2],frq3 = summary(hc_ward_cut2)[3])
+
+barplot(height = t(ind1[,c(3,4,5)]), names.arg = ind1$c,col=c("blue","red","green"),legend.text = c("1","2","3"),args.legend = list(x = "topleft"),axisnames = T,cex.names = 0.5)
+```
+
+```{r Deviding the Data}
+indices = ifelse(hc_ward_cut==1,TRUE, FALSE)
+summary(as.factor(hc_ward_cut))
+summary(indices)
+clust_1 = train_feat[indices]
+clust_2 = train_feat[!indices]
+
+```
+
+```{r looking at statistics of both Clusters}
+print("Results before Clusters, mean and Std Dev")
+mean(train_feat$mean_speed)
+sd(train_feat$mean_speed)
+
+print("~~~~~~")
+
+print("mean speed of cluster 1")
+mean(clust_1$mean_speed)
+print("mean speed of Cluster 2")
+mean(clust_2$mean_speed)
+
+print("~~~~~~~~~")
+
+print("Std Dev speed of cluster 1")
+sd(clust_1$mean_speed)
+print("Std Dev of Cluster 2")
+sd(clust_2$mean_speed)
+
+mean(clust_1$sd_speed)
+mean(clust_2$sd_speed)
+```
+
+```{r}
+train_all = fread("E:/USA/Projects/Research/R_code/train_all_steer.csv",data.table = T)[,5:65]
+clust_all_1 = train_all[indices]
+clust_all_2 = train_all[!indices]
+```
+
+```{r}
+plot(y = clust_all_1[1,], x = rep(1:ncol(clust_all_1)),type = 'l')
+for (i in rep(1:nrow(clust_all_1)))
+    lines(y = clust_all_1[i,], x = rep(1:ncol(clust_all_1)))
+```
+```{r}
+plot(y = clust_all_2[1,], x = rep(1:ncol(clust_all_2)),type = 'l')
+for (i in rep(1:nrow(clust_all_1)))
+    lines(y = clust_all_2[i,], x = rep(1:ncol(clust_all_2)))
+```
+
+
