@@ -11,6 +11,8 @@ The second category, NREM, is divided into three stages; stage one is related to
  It is a state of reduced attention and vigilance towards any tasks being performed. Thus, drowsiness is dangerous in driving situations, where a driver’s loss of attention and increased response time can cause road accidents resulting in serious injuries and deaths. The major contributing factors to drowsiness are long working hours, lack of sleep, and continuous driving.
 
  This project aims to develop system that can mitigate this type of accidents by predicting drowsiness and providing feedback to drivers.
+ 
+ Submmited Research Paper - [Link](https://journals.sagepub.com/doi/pdf/10.1177/1071181319631220)
 
 
  
